@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "claimlens"
 version = "1.0.0"
@@ -21,6 +25,9 @@ dependencies = [
 dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6", "mypy>=1.11"]
 local-ocr = ["pytesseract>=0.3", "pdf2image>=1.17", "pillow>=10.4"]
 local-embeddings = ["sentence-transformers>=3.0"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
