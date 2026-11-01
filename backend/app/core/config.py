@@ -10,7 +10,9 @@ class Settings(BaseSettings):
 
     # Auth
     jwt_secret: str = "change-me-in-production"
-    jwt_ttl_minutes: int = 60
+    jwt_ttl_minutes: int = 15
+    refresh_token_ttl_days: int = 14
+    refresh_cookie_secure: bool = False  # set true behind HTTPS
     # Seed users created on first start: "email:password:ROLE:team" separated by commas
     seed_users: str = (
         "adjuster@claimlens.dev:adjuster123:ADJUSTER:Property,"

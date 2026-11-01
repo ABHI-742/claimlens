@@ -32,7 +32,12 @@ export interface ClaimDetail extends ClaimSummary {
 }
 
 const BASE = '/api/v1';
-let token: string | null = sessionStorage.getItem('claimlens.token');
+
+// The access token lives only in memory. The refresh token is an httpOnly cookie the
+// browser sends to /api/v1/auth, so a page reload restores the session through refresh().
+let token: string | null = null;
+let role: string | null = null;
+let refreshing: Promise<boolean> | null = null;
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -40,44 +45,66 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+function setSession(result: { access_token: string; role: string } | null) {
+  token = result?.access_token ?? null;
+  role = result?.role ?? null;
+}
+
+/** Exchanges the refresh cookie for a new access token. Concurrent callers share one request. */
+function refresh(): Promise<boolean> {
+  refreshing ??= fetch(`${BASE}/auth/refresh`, { method: 'POST', credentials: 'same-origin' })
+    .then(async (r) => {
+      setSession(r.ok ? await r.json() : null);
+      return r.ok;
+    })
+    .catch(() => false)
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
+}
+
+async function request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
   const response = await fetch(BASE + path, {
     ...init,
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
   });
+  if (response.status === 401 && retry && !path.startsWith('/auth/') && (await refresh())) {
+    return request<T>(path, init, false);
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     const detail = typeof body.detail === 'string' ? body.detail : response.statusText;
     throw new ApiError(response.status, detail);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
 export const api = {
-  isLoggedIn: () => token !== null,
+  /** Called once on startup: true if the refresh cookie still holds a valid session. */
+  restoreSession: () => refresh(),
 
   async login(email: string, password: string): Promise<string> {
     const result = await request<{ access_token: string; role: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    token = result.access_token;
-    sessionStorage.setItem('claimlens.token', token);
-    sessionStorage.setItem('claimlens.role', result.role);
+    setSession(result);
     return result.role;
   },
 
-  logout() {
-    token = null;
-    sessionStorage.removeItem('claimlens.token');
-    sessionStorage.removeItem('claimlens.role');
+  async logout() {
+    await request('/auth/logout', { method: 'POST' }).catch(() => undefined);
+    setSession(null);
   },
 
-  role: () => sessionStorage.getItem('claimlens.role'),
+  role: () => role,
 
   listClaims: (queue: Queue) =>
     request<ClaimSummary[]>(`/claims?queue=${queue}&status=READY_FOR_REVIEW`),

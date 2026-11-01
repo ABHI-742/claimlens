@@ -1,9 +1,10 @@
-"""Password hashing (PBKDF2) and JWT access tokens."""
+"""Password hashing (PBKDF2), JWT access tokens and opaque refresh tokens."""
 
 import base64
 import hashlib
 import hmac
 import os
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -43,3 +44,13 @@ def create_access_token(user_id: str, role: str, team_id: str) -> str:
 
 def decode_access_token(token: str) -> dict:
     return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+
+
+def new_refresh_token() -> tuple[str, str]:
+    """Returns (token for the cookie, SHA-256 hash for the database). Only the hash is stored."""
+    token = secrets.token_urlsafe(48)
+    return token, hash_refresh_token(token)
+
+
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()

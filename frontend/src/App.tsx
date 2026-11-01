@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api';
 import { ClaimDetailView } from './components/ClaimDetailView';
 import { ClaimQueue } from './components/ClaimQueue';
@@ -9,9 +9,14 @@ import './styles.css';
 type View = { kind: 'queue' } | { kind: 'claim'; id: string } | { kind: 'new' };
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(api.isLoggedIn());
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [view, setView] = useState<View>({ kind: 'queue' });
 
+  useEffect(() => {
+    api.restoreSession().then(setLoggedIn);
+  }, []);
+
+  if (loggedIn === null) return <p className="muted">Loading…</p>;
   if (!loggedIn) return <LoginForm onLogin={() => setLoggedIn(true)} />;
 
   return (
@@ -28,8 +33,8 @@ export default function App() {
         <button
           type="button"
           className="secondary"
-          onClick={() => {
-            api.logout();
+          onClick={async () => {
+            await api.logout();
             setLoggedIn(false);
           }}
         >

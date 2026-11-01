@@ -75,7 +75,7 @@ More diagrams (sequence, class, ER, state, deployment) are in [`docs/`](docs/).
 | --- | --- |
 | API | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic |
 | Worker | Python, boto3 (SQS/S3/Textract), Anthropic SDK |
-| Auth | JWT access tokens, PBKDF2 password hashing, role-based access (adjuster, supervisor, admin) |
+| Auth | 15-minute JWT access tokens, rotating single-use refresh tokens in an httpOnly cookie (hashed at rest, reuse detection), PBKDF2 password hashing, role-based access (adjuster, supervisor, admin) |
 | AI | Claude Opus 5.5 via the Anthropic SDK: structured outputs, prompt caching on the system prompts, server-side refusal fallback. Embeddings: Amazon Bedrock Titan v2, a local sentence-transformers model, or a dependency-free hashing embedder for development |
 | Data | PostgreSQL 16 + pgvector (HNSW index), S3 (LocalStack locally) |
 | Frontend | React 18, TypeScript, Vite, TanStack Query |

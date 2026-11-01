@@ -5,7 +5,7 @@
 | Goal | How the design addresses it |
 | --- | --- |
 | Adjusters stay in control | The system only *recommends* a queue and a summary. Every decision is a human action, and every action is audit-logged |
-| No sensitive data sent to the LLM | PII is masked after OCR and before any model call; the token map is stored encrypted, never in prompts |
+| No sensitive data sent to the LLM | PII is masked after OCR and before any model call; the token map exists only in worker memory for that run; it is never stored or put in a prompt |
 | Explainable output | Coverage reasoning must cite policy clause IDs retrieved by RAG; answers without valid citations are rejected by validation |
 | Uploads never block | Upload returns immediately; processing runs asynchronously from a queue, with retries and a dead-letter queue |
 | Runs on a laptop | Every AWS dependency has a local stand-in (LocalStack, Tesseract, local embeddings) behind an interface |
@@ -83,7 +83,7 @@ Weights and thresholds live in configuration, not code.
 
 ## 6. Security
 
-- **Authentication and authorization:** JWT access tokens; roles `ADJUSTER`, `SUPERVISOR`, `ADMIN`; adjusters only see claims assigned to their team
+- **Authentication and authorization:** short-lived JWT access tokens (15 min, kept in memory by the console) and single-use refresh tokens (14 days) in an httpOnly, SameSite=Strict cookie scoped to `/api/v1/auth`. Only a SHA-256 hash of each refresh token is stored; replaying a used token revokes every session for that user ([sequence](diagrams/sequence-auth-refresh.md)). Roles `ADJUSTER`, `SUPERVISOR`, `ADMIN`; adjusters only see claims assigned to their team
 - **PII:** regex and checksum detectors (SSN, card numbers with Luhn check, IBAN, phone, email); tokens like `[SSN_1]` replace values in text sent to Claude
 - **Prompt injection:** document text is passed as data inside clearly delimited blocks; responses are constrained to a JSON schema (structured outputs) and the model has no tools, so it cannot trigger actions
 - **Audit:** append-only `audit_events` table records every status change, model call (prompt hash, model, tokens, latency) and human action
@@ -95,6 +95,7 @@ Weights and thresholds live in configuration, not code.
 | Use cases | [diagrams/use-cases.md](diagrams/use-cases.md) |
 | Sequence: claim submission to triage | [diagrams/sequence-claim-processing.md](diagrams/sequence-claim-processing.md) |
 | Sequence: adjuster review | [diagrams/sequence-adjuster-review.md](diagrams/sequence-adjuster-review.md) |
+| Sequence: login and token refresh | [diagrams/sequence-auth-refresh.md](diagrams/sequence-auth-refresh.md) |
 | Sequence: policy ingestion | [diagrams/sequence-policy-ingestion.md](diagrams/sequence-policy-ingestion.md) |
 | Class diagram | [diagrams/class-diagram.md](diagrams/class-diagram.md) |
 | Entity-relationship | [diagrams/er-diagram.md](diagrams/er-diagram.md) |
