@@ -9,14 +9,14 @@ flowchart TB
         api["api: uvicorn :8000"]
         worker["worker: claim pipeline"]
         pg[("postgres: pgvector/pgvector:pg16 :5432")]
-        ls["localstack: S3 and SQS :4566"]
+        ls["localstack :4566<br/>S3 bucket, SQS claim-jobs and claim-jobs-dlq"]
     end
     anthropic[[api.anthropic.com]]
 
-    web --> api
+    web -->|"/api proxy, refresh cookie"| api
     api --> pg
-    api --> ls
-    worker --> ls
+    api -->|"presigned URLs, enqueue"| ls
+    worker -->|"receive, retry, DLQ after 3"| ls
     worker --> pg
     worker --> anthropic
 ```

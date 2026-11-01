@@ -2,27 +2,30 @@
 
 ```mermaid
 stateDiagram-v2
-    [*] --> DRAFT: claim created
+    [*] --> DRAFT: POST /claims
     DRAFT --> SUBMITTED: documents uploaded and submitted
-    SUBMITTED --> PROCESSING: worker picks up job
-    PROCESSING --> PROCESSING: transient error, retry up to 3
+    SUBMITTED --> PROCESSING: worker receives the SQS message
+    PROCESSING --> PROCESSING: error, message returns to the queue (up to 3 receives)
     PROCESSING --> READY_FOR_REVIEW: pipeline succeeded
-    PROCESSING --> FAILED: retries exhausted
+    PROCESSING --> FAILED: 3rd attempt failed, message moves to the DLQ
+    PROCESSING --> FAILED: Claude refused, not retried
     FAILED --> SUBMITTED: admin requeues
 
     state READY_FOR_REVIEW {
         [*] --> FAST_TRACK
         [*] --> STANDARD
         [*] --> INVESTIGATE
-        FAST_TRACK --> STANDARD: adjuster downgrades
-        STANDARD --> INVESTIGATE: escalate
+        FAST_TRACK --> INVESTIGATE: ESCALATE
+        STANDARD --> INVESTIGATE: ESCALATE
     }
 
-    READY_FOR_REVIEW --> AWAITING_INFO: request information
-    AWAITING_INFO --> SUBMITTED: claimant adds documents
-    READY_FOR_REVIEW --> APPROVED: approve
-    READY_FOR_REVIEW --> DENIED: deny with supervisor sign-off
-    APPROVED --> CLOSED: payment issued
+    READY_FOR_REVIEW --> AWAITING_INFO: REQUEST_INFO
+    AWAITING_INFO --> SUBMITTED: resubmitted with more documents
+    READY_FOR_REVIEW --> APPROVED: APPROVE (supervisor if a HIGH fraud flag)
+    READY_FOR_REVIEW --> DENIED: DENY (supervisor or admin only)
+    APPROVED --> CLOSED
     DENIED --> CLOSED
     CLOSED --> [*]
 ```
+
+`CLOSED` is reserved for a downstream payments system and is not set by ClaimLens today. Every transition writes an `audit_events` row.

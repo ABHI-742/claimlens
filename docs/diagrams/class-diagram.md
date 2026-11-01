@@ -1,5 +1,7 @@
 # Class diagram (domain and services)
 
+Names match the code in `backend/app/`.
+
 ```mermaid
 classDiagram
     direction LR
@@ -10,42 +12,53 @@ classDiagram
         +ClaimStatus status
         +TriageQueue queue
         +float triage_score
-        +datetime submitted_at
-        +submit()
-        +mark_ready(result)
-        +decide(decision, actor)
+        +str failure_reason
     }
     class Document {
-        +UUID id
         +str s3_key
-        +str mime_type
+        +str content_sha256
         +str ocr_text_masked
         +float ocr_confidence
     }
-    class ClaimFacts {
-        +date loss_date
-        +str loss_type
-        +str location
-        +Decimal claimed_amount
-        +str description
-    }
-    class CoverageAssessment {
-        +CoverageVerdict verdict
-        +str reasoning
-        +list cited_clause_ids
-        +float uncertainty
-    }
-    class FraudFlag {
-        +str code
-        +Severity severity
-        +str evidence
-    }
-
+    class ClaimFactsRow
+    class CoverageAssessmentRow
+    class FraudFlagRow
     Claim "1" *-- "many" Document
-    Claim "1" *-- "0..1" ClaimFacts
-    Claim "1" *-- "0..1" CoverageAssessment
-    Claim "1" *-- "many" FraudFlag
+    Claim "1" *-- "0..1" ClaimFactsRow
+    Claim "1" *-- "0..1" CoverageAssessmentRow
+    Claim "1" *-- "many" FraudFlagRow
 
+    class Worker {
+        +handle(job)
+        +run_forever()
+    }
+    class JobQueue {
+        <<interface>>
+        +send(type, id)
+        +receive() list
+        +delete(job)
+    }
+    class SqsQueue
+    JobQueue <|.. SqsQueue
+    class Storage {
+        <<interface>>
+        +presign_put(key, mime)
+        +presign_get(key)
+        +get_bytes(key)
+    }
+    class S3Storage
+    Storage <|.. S3Storage
+    class PolicyIngestor {
+        +ingest(policy_id)
+    }
+    Worker --> JobQueue
+    Worker --> ClaimPipeline
+    Worker --> PolicyIngestor
+
+    class ClaimPipeline {
+        +run(claim_id)
+        +mark_failed(claim_id, reason)
+    }
     class OcrProvider {
         <<interface>>
         +extract(data, mime) OcrResult
@@ -55,37 +68,59 @@ classDiagram
     OcrProvider <|.. TextractOcr
     OcrProvider <|.. TesseractOcr
 
+    class PiiMasker {
+        +mask(text) MaskedText
+    }
+    class StructuredLlm {
+        <<interface>>
+        +json(system, user, schema) dict
+    }
+    class ClaudeStructuredLlm {
+        +str model
+    }
+    StructuredLlm <|.. ClaudeStructuredLlm
+
+    class ClaimExtractor {
+        <<interface>>
+        +extract(masked_text, product) Extraction
+    }
+    class ClaudeClaimExtractor
+    ClaimExtractor <|.. ClaudeClaimExtractor
+    class CoverageAssessor {
+        <<interface>>
+        +assess(facts, clauses) CoverageAssessment
+    }
+    class ClaudeCoverageAssessor
+    CoverageAssessor <|.. ClaudeCoverageAssessor
+    ClaudeClaimExtractor --> StructuredLlm
+    ClaudeCoverageAssessor --> StructuredLlm
+
+    class PolicyRetriever {
+        <<interface>>
+        +top_k(query, product, k) list
+    }
+    class PgVectorRetriever
+    PolicyRetriever <|.. PgVectorRetriever
     class EmbeddingProvider {
         <<interface>>
         +embed(texts) list
     }
+    class HashEmbeddings
+    class LocalModelEmbeddings
     class BedrockTitanEmbeddings
-    class LocalEmbeddings
+    EmbeddingProvider <|.. HashEmbeddings
+    EmbeddingProvider <|.. LocalModelEmbeddings
     EmbeddingProvider <|.. BedrockTitanEmbeddings
-    EmbeddingProvider <|.. LocalEmbeddings
+    PgVectorRetriever --> EmbeddingProvider
 
-    class PiiMasker {
-        +mask(text) MaskedText
-    }
-    class ClaimExtractor {
-        +extract(masked_text) ClaimFacts
-    }
-    class PolicyRetriever {
-        +top_k(query, product, k) list
-    }
-    class CoverageAssessor {
-        +assess(facts, clauses) CoverageAssessment
-    }
     class FraudRuleEngine {
-        +evaluate(claim, facts) list
+        +evaluate(ctx) list
     }
     class TriageScorer {
         +score(facts, coverage, flags) TriageResult
     }
-    class ClaimPipeline {
-        +run(claim_id)
-    }
 
+    ClaimPipeline --> Storage
     ClaimPipeline --> OcrProvider
     ClaimPipeline --> PiiMasker
     ClaimPipeline --> ClaimExtractor
@@ -93,5 +128,7 @@ classDiagram
     ClaimPipeline --> CoverageAssessor
     ClaimPipeline --> FraudRuleEngine
     ClaimPipeline --> TriageScorer
-    PolicyRetriever --> EmbeddingProvider
+    ClaimPipeline --> Claim
 ```
+
+Every `<<interface>>` is a Python `Protocol`. `ClaudeStructuredLlm` calls `claude-opus-5-5` with JSON-schema structured outputs; `ClaudeCoverageAssessor` raises `CitationError` when a cited clause was not retrieved. The tests swap in fakes (`FakeStorage`, `FakeQueue`, `FakeLlm`) through the same interfaces.

@@ -35,11 +35,12 @@ flowchart LR
 
     subgraph API["FastAPI service"]
         R[REST API]
-        AUTH[JWT auth + RBAC]
+        AUTH["Auth + RBAC<br/>15-min JWT, rotating refresh cookie"]
     end
 
     subgraph Async["Processing pipeline"]
-        Q[(SQS queue)]
+        Q[(SQS claim-jobs)]
+        DLQ[(SQS dead-letter queue)]
         W[Claim worker]
         OCR[OCR provider<br/>Textract / Tesseract]
         PII[PII masker]
@@ -56,10 +57,13 @@ flowchart LR
 
     UI -->|HTTPS| R
     R --> AUTH
-    R -->|upload| S3
+    R -->|presigned URL| UI
+    UI -->|direct upload| S3
     R -->|enqueue claim_id| Q
     R <-->|read/write| PG
     Q --> W
+    Q -.->|after 3 failed attempts| DLQ
+    W -->|fetch documents| S3
     W --> OCR --> PII --> LLM
     W --> RAG
     RAG <--> PG
@@ -67,7 +71,7 @@ flowchart LR
     TR -->|results + audit| PG
 ```
 
-More diagrams (sequence, class, ER, state, deployment) are in [`docs/`](docs/).
+The full design, including reliability, idempotency, security and scaling, is in [`docs/architecture.md`](docs/architecture.md). More diagrams (sequence, class, ER, state, deployment) are in [`docs/diagrams/`](docs/diagrams/).
 
 ## Tech stack
 
@@ -164,6 +168,7 @@ Python · FastAPI · Generative AI · Anthropic Claude · RAG · pgvector / HNSW
 - [x] Claude structured extraction
 - [x] Policy ingestion and pgvector RAG coverage check with validated citations
 - [x] Fraud rules and triage scoring
+- [x] Auth with 15-minute access tokens and rotating refresh tokens (hashed, reuse detection)
 - [x] Adjuster console with role-based decisions and a full audit trail
 - [x] LLM evaluation set
 - [ ] Apply the Terraform module to a real AWS account
