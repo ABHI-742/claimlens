@@ -85,7 +85,7 @@ Weights and thresholds live in configuration, not code.
 
 - **Authentication and authorization:** JWT access tokens; roles `ADJUSTER`, `SUPERVISOR`, `ADMIN`; adjusters only see claims assigned to their team
 - **PII:** regex and checksum detectors (SSN, card numbers with Luhn check, IBAN, phone, email); tokens like `[SSN_1]` replace values in text sent to Claude
-- **Prompt injection:** document text is passed as data inside clearly delimited blocks; the model can only return structured fields through a tool schema and cannot trigger actions
+- **Prompt injection:** document text is passed as data inside clearly delimited blocks; responses are constrained to a JSON schema (structured outputs) and the model has no tools, so it cannot trigger actions
 - **Audit:** append-only `audit_events` table records every status change, model call (prompt hash, model, tokens, latency) and human action
 
 ## 7. Diagrams

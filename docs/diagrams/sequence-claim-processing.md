@@ -32,7 +32,7 @@ sequenceDiagram
         OCR-->>W: text and confidence
     end
     W->>W: mask PII, keep token map
-    W->>LLM: extract structured claim (tool schema)
+    W->>LLM: extract structured claim (JSON schema)
     LLM-->>W: ClaimFacts JSON
     W->>VEC: top-k policy clauses for the loss type
     VEC-->>W: clauses and scores

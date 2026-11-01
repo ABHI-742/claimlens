@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.core.config import Settings, settings
-from app.schemas.claim import CoverageAssessment, FraudFlag, Severity, TriageQueue
+from app.schemas.claim import CoverageAssessment, CoverageVerdict, FraudFlag, Severity, TriageQueue
 
 _FRAUD_WEIGHT = {Severity.LOW: 0.2, Severity.MEDIUM: 0.5, Severity.HIGH: 1.0}
 
@@ -40,6 +40,7 @@ class TriageScorer:
         elif (
             score < c.triage_fast_track_max_score
             and not flags
+            and coverage.verdict == CoverageVerdict.COVERED
             and claimed_amount is not None
             and claimed_amount < Decimal(str(c.triage_fast_track_max_amount))
         ):

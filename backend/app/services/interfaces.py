@@ -1,9 +1,9 @@
-"""Provider interfaces for the claim pipeline. Implementations are on the roadmap."""
+"""Provider interfaces for the claim pipeline (docs/diagrams/class-diagram.md)."""
 
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.schemas.claim import ClaimFacts, CoverageAssessment, FraudFlag
+from app.schemas.claim import ClaimFacts, CoverageAssessment
 
 
 @dataclass(frozen=True)
@@ -13,10 +13,17 @@ class OcrResult:
 
 
 @dataclass(frozen=True)
-class PolicyChunk:
+class RetrievedClause:
     clause_id: str
     content: str
     score: float
+
+
+@dataclass(frozen=True)
+class Extraction:
+    facts: ClaimFacts
+    severity: float
+    inconsistencies: list[str]
 
 
 class OcrProvider(Protocol):
@@ -26,28 +33,24 @@ class OcrProvider(Protocol):
 
 
 class EmbeddingProvider(Protocol):
-    """Bedrock Titan in AWS, sentence-transformers locally."""
+    """Bedrock Titan in AWS, sentence-transformers or a hashing embedder locally."""
 
     def embed(self, texts: list[str]) -> list[list[float]]: ...
 
 
 class ClaimExtractor(Protocol):
-    """Asks Claude to fill the ClaimFacts schema from masked document text."""
+    """Fills the ClaimFacts schema from masked document text."""
 
-    def extract(self, masked_text: str) -> ClaimFacts: ...
+    def extract(self, masked_text: str, product: str) -> Extraction: ...
 
 
 class PolicyRetriever(Protocol):
-    """Top-k cosine similarity search over policy_chunks (pgvector HNSW)."""
+    """Top-k cosine similarity search over policy chunks for one product."""
 
-    def top_k(self, query: str, product: str, k: int) -> list[PolicyChunk]: ...
+    def top_k(self, query: str, product: str, k: int) -> list[RetrievedClause]: ...
 
 
 class CoverageAssessor(Protocol):
-    """Asks Claude whether the loss is covered; must cite retrieved clause IDs."""
+    """Decides whether the loss is covered, citing only retrieved clause IDs."""
 
-    def assess(self, facts: ClaimFacts, clauses: list[PolicyChunk]) -> CoverageAssessment: ...
-
-
-class FraudRuleEngine(Protocol):
-    def evaluate(self, facts: ClaimFacts, documents_text: list[str]) -> list[FraudFlag]: ...
+    def assess(self, facts: ClaimFacts, clauses: list[RetrievedClause]) -> CoverageAssessment: ...
